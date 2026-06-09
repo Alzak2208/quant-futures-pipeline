@@ -5,16 +5,16 @@ Implementation of quantitative finance techniques from *Advances in Financial Ma
 ## Project Structure
 
 ```
-├── src/                    # Core library
+├── src/                       # Core library
 │   ├── instrument_config.py   # Contract specs & sampling config
 │   ├── data_processing.py     # Data loading, cleaning, tick rule
 │   ├── bars_creator.py        # Standard, Imbalance & Runs bars (Numba)
 │   ├── etf_trick.py           # ETF Trick for continuous series construction
 │   └── allocation.py          # PCA-based portfolio weights
-├── notebooks/              # Exploration & experiments
-├── data/                   # Parquet tick data (not versioned)
-├── docs/                   # Reference material
-├── tests/                  # Unit tests
+├── notebooks/                 # Exploration & experiments
+├── data/                      # Parquet tick data (not versioned)
+├── docs/                      # Reference material
+├── tests/                     # Unit tests
 ├── requirements.txt
 └── pyproject.toml
 ```
