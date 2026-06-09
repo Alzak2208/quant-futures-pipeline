@@ -1,0 +1,15 @@
+name: proj_ml_fin
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.10
+  - matplotlib
+  - numba
+  - numpy
+  - pandas
+  - pyarrow
+  - pytest
+  - pip
+  - pip:
+      - -e .
