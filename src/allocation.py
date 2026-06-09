@@ -1,3 +1,22 @@
+"""
+PCA risk allocation
+====================
+
+Computes portfolio weights by distributing risk across the principal components
+(eigenportfolios) of the covariance matrix, following the spectral allocation
+method in *Advances in Financial Machine Learning* (Lopez de Prado, Section
+2.4.2).
+
+Given a target volatility and a desired split of risk across components, the
+weights are obtained by scaling each eigenportfolio by the square root of its
+allocated variance and projecting back into the asset space. By default all risk
+is placed on the lowest-variance component, a common starting point for
+mean-reversion baskets.
+
+Dependencies:
+    - numpy
+"""
+
 import numpy as np
 from numpy.typing import NDArray
 from typing import Optional

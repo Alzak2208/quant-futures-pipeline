@@ -1,3 +1,24 @@
+"""
+ETF Trick
+=========
+
+Splices a set of disjoint futures contracts into a single continuous, tradable
+price series, following the "ETF Trick" from *Advances in Financial Machine
+Learning* (Lopez de Prado, Section 2.4).
+
+The output series K tracks the value of an initial $1 allocation as it is rolled
+from one contract to the next without injecting artificial price gaps. At each
+roll the P&L is taken from Close minus Open (instead of Close minus Close) and
+the holdings h are rebalanced to keep dollar exposure constant. A Numba core
+performs the recursive update of K and h. Both fixed and time-varying weights
+are supported.
+
+Dependencies:
+    - numpy
+    - pandas
+    - numba (JIT compilation of the recursive core engine)
+"""
+
 import numpy as np
 import pandas as pd
 from numba import njit

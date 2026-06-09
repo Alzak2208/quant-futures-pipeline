@@ -2,16 +2,16 @@
 Statistical comparison of bar types (AFML Chapter 2)
 ====================================================
 
-Empirical study of four sampling schemes — time, tick, volume and dollar bars —
+Empirical study of four sampling schemes (time, tick, volume and dollar bars)
 on real CME E-mini S&P 500 (ES) tick data, following *Advances in Financial
 Machine Learning* (Lopez de Prado, Chapter 2). It quantifies the properties that
 matter for downstream machine learning:
 
-    1. Sampling adaptivity            — bars per day vs. information flow
-    2. Sampling-frequency stability   (Ex. 2.1.a) — weekly bar counts
-    3. Serial correlation of returns  (Ex. 2.1.b) — lag-1 autocorrelation
-    4. Variance stationarity          (Ex. 2.1.c) — variance of monthly variances
-    5. Return normality               (Ex. 2.1.d) — Jarque-Bera, skew, kurtosis
+    1. Sampling adaptivity            (bars per day vs. information flow)
+    2. Sampling-frequency stability   (Ex. 2.1.a): weekly bar counts
+    3. Serial correlation of returns  (Ex. 2.1.b): lag-1 autocorrelation
+    4. Variance stationarity          (Ex. 2.1.c): variance of monthly variances
+    5. Return normality               (Ex. 2.1.d): Jarque-Bera, skew, kurtosis
 
 Methodology
 -----------
@@ -222,7 +222,7 @@ def plot_weekly_counts(bars: dict[str, pd.DataFrame], path: Path) -> None:
         cov = weekly.std() / weekly.mean()
         ax.plot(weekly.index, weekly.values, marker="o", ms=3, color=COLORS[b],
                 label=f"{b} (CoV={cov:.2f})")
-    ax.set_title("Weekly bar counts — information-driven bars track market activity; "
+    ax.set_title("Weekly bar counts: information-driven bars track market activity, "
                  "time bars ignore it")
     ax.set_ylabel("bars per week")
     ax.legend()
@@ -263,18 +263,18 @@ def main() -> None:
 
     RESULTS_DIR.mkdir(exist_ok=True)
 
-    logger.info("Pass 1/2 — calibrating thresholds over %d months...", len(args.months))
+    logger.info("Pass 1/2: calibrating thresholds over %d months...", len(args.months))
     thresholds, available = scan_thresholds(args.symbol, args.months, args.freq)
     if not available:
         logger.error("No data files matched. Aborting.")
         return
 
-    logger.info("Pass 2/2 — building bars...")
+    logger.info("Pass 2/2: building bars...")
     bars = build_all(args.symbol, available, args.freq, thresholds)
 
     table = summary_table(bars)
     pd.set_option("display.float_format", lambda x: f"{x:,.4f}")
-    print(f"\n=== AFML Chapter 2 — bar statistics ({args.symbol}, {len(available)} months 2022) ===\n")
+    print(f"\n=== AFML Chapter 2: bar statistics ({args.symbol}, {len(available)} months 2022) ===\n")
     print(table.to_string())
     table.to_csv(RESULTS_DIR / "bar_statistics.csv")
 
