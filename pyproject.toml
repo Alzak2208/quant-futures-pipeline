@@ -1,11 +1,35 @@
 [build-system]
 requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "ml-finance"
+name = "quant-futures-pipeline"
 version = "0.1.0"
+description = "Information-driven bars, ETF Trick and PCA allocation on CME futures tick data (Advances in Financial Machine Learning)."
+readme = "README.md"
 requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Alyou BAMBA", email = "alyouzakariha.bamba@ensae.fr" }]
+keywords = ["quantitative-finance", "market-microstructure", "futures", "machine-learning", "numba"]
+
+# Single source of truth for runtime dependencies. Lower bounds match the
+# versions the project is developed and tested against.
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "numba>=0.59",
+    "pyarrow>=14.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.urls]
+Repository = "https://github.com/Alzak2208/quant-futures-pipeline"
 
 [tool.setuptools.packages.find]
-include = ["src*"]
+include = ["src*", "analysis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,15 +1,10 @@
 name: proj_ml_fin
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - python>=3.10
-  - matplotlib
-  - numba
-  - numpy
-  - pandas
-  - pyarrow
-  - pytest
   - pip
+  # All Python dependencies are declared in pyproject.toml (single source of
+  # truth) and installed via the editable install below, including dev extras.
   - pip:
-      - -e .
+      - -e .[dev]
