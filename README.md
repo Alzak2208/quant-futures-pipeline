@@ -1,4 +1,4 @@
-# ML Finance
+# Quant Futures Pipeline
 
 [![CI](https://github.com/Alzak2208/quant-futures-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Alzak2208/quant-futures-pipeline/actions/workflows/ci.yml)
 
@@ -15,7 +15,6 @@ Implementation of quantitative finance techniques from *Advances in Financial Ma
 │   └── allocation.py          # PCA-based portfolio weights
 ├── analysis/                  # Reproducible studies (AFML Ch.2 bar statistics)
 ├── results/                   # Generated figures & tables
-├── notebooks/                 # Exploration & experiments
 ├── data/                      # Parquet tick data (not versioned)
 ├── docs/                      # Reference material
 ├── tests/                     # Unit tests
@@ -74,6 +73,16 @@ The heavy tails that remain (kurtosis well above 0) are not data errors. The lar
 
 ES (S&P 500), NQ (Nasdaq 100), YM (Dow Jones), CL (Crude Oil), RB (Gasoline), ZN (10Y T-Note), ZF (5Y T-Note), GC (Gold), SI (Silver), 6E (Euro FX).
 
+## Data
+
+The pipeline reads CME Globex tick data purchased from [Databento](https://databento.com)
+(dataset `GLBX.MDP3`, `trades` schema, continuous front-month symbology `ES.c.0`, `NQ.c.0`, ...).
+Raw captures are multi-GB and therefore **not versioned**; place them in `data/` as Parquet
+files named `{symbol}*{period}*.parquet` (e.g. `ES_Mar2022.parquet`), which is the pattern
+`data_loader` matches on. Required columns: `instrument_id`, `action`, `ts_event`, `price`, `size`.
+Contract specifications (point values, tick sizes) for each symbol live in
+`src/instrument_config.py`.
+
 ## Setup
 
 ```bash
@@ -88,8 +97,9 @@ Or with plain pip (Python >= 3.10):
 pip install -e ".[dev]"
 ```
 
-## Tests
+## Tests & Lint
 
 ```bash
-pytest tests/ -v
+pytest tests/ -v                              # unit + numerical-correctness tests
+ruff check . && ruff format --check .         # lint & formatting (same as CI)
 ```
