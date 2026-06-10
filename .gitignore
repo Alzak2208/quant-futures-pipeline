@@ -6,8 +6,10 @@ __pycache__/
 dist/
 build/
 
-# Jupyter
+# Jupyter (local research notebooks, kept out of the published repo)
 .ipynb_checkpoints/
+notebooks/
+docs/*.ipynb
 
 # macOS
 .DS_Store
