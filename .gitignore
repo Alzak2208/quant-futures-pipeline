@@ -22,8 +22,8 @@ docs/*.ipynb
 data/*.csv
 data/*.parquet
 
-# Protected documents
-docs/*.pdf
+# Reference documents (local-only)
+docs/
 
 # LaTeX build artifacts
 *.aux

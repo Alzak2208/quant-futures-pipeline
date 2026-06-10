@@ -16,7 +16,6 @@ Implementation of quantitative finance techniques from *Advances in Financial Ma
 ├── analysis/                  # Reproducible studies (AFML Ch.2 bar statistics)
 ├── results/                   # Generated figures & tables
 ├── data/                      # Parquet tick data (not versioned)
-├── docs/                      # Reference material
 ├── tests/                     # Unit tests
 ├── environment.yml
 └── pyproject.toml             # Single source of dependencies & build config
