@@ -2,24 +2,23 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.data_processing import data_cleaner_for_bars, tick_rule_creator
-
 
 # ---------------------------------------------------------------------------
 # tick_rule_creator
 # ---------------------------------------------------------------------------
+
 
 class TestTickRule:
     def test_basic_signs(self):
         prices = pd.Series([100.0, 101.0, 99.0, 99.0, 100.0])
         result = tick_rule_creator(prices)
         assert np.isnan(result[0])
-        assert result[1] == 1.0   # uptick
+        assert result[1] == 1.0  # uptick
         assert result[2] == -1.0  # downtick
         assert result[3] == -1.0  # zero-tick -> previous sign
-        assert result[4] == 1.0   # uptick
+        assert result[4] == 1.0  # uptick
 
     def test_single_price(self):
         result = tick_rule_creator(pd.Series([50.0]))
@@ -34,6 +33,7 @@ class TestTickRule:
 # ---------------------------------------------------------------------------
 # data_cleaner_for_bars
 # ---------------------------------------------------------------------------
+
 
 class TestDataCleaner:
     def test_filters_trades_only(self, make_raw_ticks):

@@ -2,14 +2,13 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.bars_creator import (
+    apply_imbalance_bars,
+    dollar_bars_creator,
+    roll_indices_from_dates,
     tick_bars_creator,
     volume_bars_creator,
-    dollar_bars_creator,
-    apply_imbalance_bars,
-    roll_indices_from_dates,
 )
 
 OHLCV_COLS = ["open", "high", "low", "close", "vwap", "volume", "tick_count"]
@@ -18,6 +17,7 @@ OHLCV_COLS = ["open", "high", "low", "close", "vwap", "volume", "tick_count"]
 # ---------------------------------------------------------------------------
 # Standard Bars
 # ---------------------------------------------------------------------------
+
 
 class TestTickBars:
     def test_basic(self, make_clean_ticks):
@@ -64,6 +64,7 @@ class TestDollarBars:
 # ---------------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------------
+
 
 class TestRollIndicesFromDates:
     def test_basic(self):
