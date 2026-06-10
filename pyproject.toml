@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [project.urls]
 Repository = "https://github.com/Alzak2208/quant-futures-pipeline"
@@ -33,3 +33,12 @@ include = ["src*", "analysis*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: import sorting, UP: modern syntax (py310+),
+# B: bugbear (likely bugs), NPY: numpy-specific rules
+select = ["E", "F", "W", "I", "UP", "B", "NPY"]

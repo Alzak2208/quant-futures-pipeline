@@ -43,19 +43,19 @@ import argparse
 import logging
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
 
 matplotlib.use("Agg")  # headless backend (no display needed)
 import matplotlib.pyplot as plt
 
-from src.data_processing import data_loader, data_cleaner_for_bars
 from src.bars_creator import (
+    dollar_bars_creator,
     tick_bars_creator,
     volume_bars_creator,
-    dollar_bars_creator,
 )
+from src.data_processing import data_cleaner_for_bars, data_loader
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -68,8 +68,16 @@ RESULTS_DIR = ROOT / "results"
 # 2022 ES months light enough to process tick-by-tick (the Jan/Oct captures are
 # multi-hundred-million rows and excluded for runtime).
 DEFAULT_MONTHS = [
-    "Feb2022", "Mar2022", "Apr2022", "May2022", "Jun2022",
-    "Jul2022", "Aug2022", "Sep2022", "Nov2022", "Dec2022",
+    "Feb2022",
+    "Mar2022",
+    "Apr2022",
+    "May2022",
+    "Jun2022",
+    "Jul2022",
+    "Aug2022",
+    "Sep2022",
+    "Nov2022",
+    "Dec2022",
 ]
 
 BAR_TYPES = ["time", "tick", "volume", "dollar"]
@@ -79,6 +87,7 @@ COLORS = {"time": "#9e9e9e", "tick": "#1f77b4", "volume": "#2ca02c", "dollar": "
 # --------------------------------------------------------------------------- #
 # Bar construction
 # --------------------------------------------------------------------------- #
+
 
 def time_bars_creator(ticks: pd.DataFrame, freq: str) -> pd.DataFrame:
     """Baseline OHLCV time bars (fixed clock interval), for comparison only."""
@@ -125,7 +134,11 @@ def scan_thresholds(symbol: str, months: list[str], freq: str) -> tuple[dict, li
     }
     logger.info(
         "Global calibration: %s ticks, target ~%d bars/scheme -> tick=%d, volume=%d, dollar=%.3e",
-        f"{n_ticks:,}", n_time, thresholds["tick"], thresholds["volume"], thresholds["dollar"],
+        f"{n_ticks:,}",
+        n_time,
+        thresholds["tick"],
+        thresholds["volume"],
+        thresholds["dollar"],
     )
     return thresholds, available
 
@@ -145,8 +158,11 @@ def build_all(symbol: str, months: list[str], freq: str, thresholds: dict) -> di
             acc[b].append(month_bars[b])
         logger.info(
             "[%s] time=%d tick=%d volume=%d dollar=%d bars",
-            month, len(month_bars["time"]), len(month_bars["tick"]),
-            len(month_bars["volume"]), len(month_bars["dollar"]),
+            month,
+            len(month_bars["time"]),
+            len(month_bars["tick"]),
+            len(month_bars["volume"]),
+            len(month_bars["dollar"]),
         )
         del clean
 
@@ -162,6 +178,7 @@ def build_all(symbol: str, months: list[str], freq: str, thresholds: dict) -> di
 # --------------------------------------------------------------------------- #
 # Statistics
 # --------------------------------------------------------------------------- #
+
 
 def log_returns(bars: pd.DataFrame) -> pd.Series:
     """Log returns of the close price, computed *within* each calendar month.
@@ -184,7 +201,7 @@ def jarque_bera(returns: pd.Series) -> float:
     n = len(returns)
     s = returns.skew()
     k = returns.kurt()  # pandas returns excess kurtosis
-    return n / 6.0 * (s ** 2 + 0.25 * k ** 2)
+    return n / 6.0 * (s**2 + 0.25 * k**2)
 
 
 def summary_table(bars: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -195,22 +212,25 @@ def summary_table(bars: dict[str, pd.DataFrame]) -> pd.DataFrame:
         weekly = bars[b].resample("W").size()
         weekly = weekly[weekly > 0]
         monthly_var = r.resample("ME").var().dropna()
-        rows.append({
-            "bar_type": b,
-            "n_bars": len(bars[b]),
-            "weekly_count_CoV": weekly.std() / weekly.mean(),
-            "autocorr_lag1": r.autocorr(lag=1),
-            "skew": r.skew(),
-            "excess_kurtosis": r.kurt(),
-            "jarque_bera": jarque_bera(r),
-            "monthly_var_CoV": monthly_var.std() / monthly_var.mean(),
-        })
+        rows.append(
+            {
+                "bar_type": b,
+                "n_bars": len(bars[b]),
+                "weekly_count_CoV": weekly.std() / weekly.mean(),
+                "autocorr_lag1": r.autocorr(lag=1),
+                "skew": r.skew(),
+                "excess_kurtosis": r.kurt(),
+                "jarque_bera": jarque_bera(r),
+                "monthly_var_CoV": monthly_var.std() / monthly_var.mean(),
+            }
+        )
     return pd.DataFrame(rows).set_index("bar_type")
 
 
 # --------------------------------------------------------------------------- #
 # Plots
 # --------------------------------------------------------------------------- #
+
 
 def plot_weekly_counts(bars: dict[str, pd.DataFrame], path: Path) -> None:
     """Adaptivity: information-driven bars expand in active markets and contract
@@ -220,10 +240,8 @@ def plot_weekly_counts(bars: dict[str, pd.DataFrame], path: Path) -> None:
         weekly = bars[b].resample("W").size()
         weekly = weekly[weekly > 0]
         cov = weekly.std() / weekly.mean()
-        ax.plot(weekly.index, weekly.values, marker="o", ms=3, color=COLORS[b],
-                label=f"{b} (CoV={cov:.2f})")
-    ax.set_title("Weekly bar counts: information-driven bars track market activity, "
-                 "time bars ignore it")
+        ax.plot(weekly.index, weekly.values, marker="o", ms=3, color=COLORS[b], label=f"{b} (CoV={cov:.2f})")
+    ax.set_title("Weekly bar counts: information-driven bars track market activity, time bars ignore it")
     ax.set_ylabel("bars per week")
     ax.legend()
     ax.grid(alpha=0.3)
@@ -235,8 +253,8 @@ def plot_weekly_counts(bars: dict[str, pd.DataFrame], path: Path) -> None:
 def plot_return_distributions(bars: dict[str, pd.DataFrame], path: Path) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(11, 8))
     grid = np.linspace(-5, 5, 400)
-    normal_pdf = np.exp(-grid ** 2 / 2) / np.sqrt(2 * np.pi)
-    for ax, b in zip(axes.ravel(), BAR_TYPES):
+    normal_pdf = np.exp(-(grid**2) / 2) / np.sqrt(2 * np.pi)
+    for ax, b in zip(axes.ravel(), BAR_TYPES, strict=True):
         r = log_returns(bars[b])
         z = (r - r.mean()) / r.std()
         ax.hist(z, bins=200, density=True, color=COLORS[b], alpha=0.6, range=(-5, 5))
@@ -253,6 +271,7 @@ def plot_return_distributions(bars: dict[str, pd.DataFrame], path: Path) -> None
 # --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="AFML Ch.2 bar statistics comparison.")
