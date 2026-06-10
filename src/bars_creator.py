@@ -2,12 +2,12 @@
 Financial Bars Creation Module
 ==============================
 
-This module implements advanced sampling techniques to transform high-frequency 
-tick data into OHLCV (Open, High, Low, Close, Volume) bars. 
+This module implements advanced sampling techniques to transform high-frequency
+tick data into OHLCV (Open, High, Low, Close, Volume) bars.
 
-Unlike standard Time Bars (sampling every minute/hour), the methods implemented here 
-focus on **"Information-Driven"** sampling. They sample the market based on the 
-arrival of information (activity, liquidity, or economic value), allowing for 
+Unlike standard Time Bars (sampling every minute/hour), the methods implemented here
+focus on **"Information-Driven"** sampling. They sample the market based on the
+arrival of information (activity, liquidity, or economic value), allowing for
 better statistical properties (normality, serial correlation) in Machine Learning models.
 
 Theoretical Basis:
@@ -44,15 +44,14 @@ Usage Example:
 """
 
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 from numba import njit
+from numpy.typing import NDArray
 
 from src.data_processing import tick_rule_creator
 
 
-def tick_bars_creator(ticks_dataset: pd.DataFrame, 
-                      threshold: int = 1000) -> pd.DataFrame:
+def tick_bars_creator(ticks_dataset: pd.DataFrame, threshold: int = 1000) -> pd.DataFrame:
     """
     Creates Tick Bars from raw tick data using a fast vectorized approach.
 
@@ -60,7 +59,7 @@ def tick_bars_creator(ticks_dataset: pd.DataFrame,
     This synchronizes sampling with the arrival of information rather than the wall clock,
     which is particularly useful for analyzing periods of high volatility.
 
-    The implementation uses NumPy reshaping to avoid slow loops, making it extremely 
+    The implementation uses NumPy reshaping to avoid slow loops, making it extremely
     efficient for large datasets.
 
     Args:
@@ -71,62 +70,64 @@ def tick_bars_creator(ticks_dataset: pd.DataFrame,
             Defaults to 1000.
 
     Returns:
-        pd.DataFrame: A DataFrame containing OHLCV bars indexed by the timestamp 
+        pd.DataFrame: A DataFrame containing OHLCV bars indexed by the timestamp
         of the *last* tick in each bar.
         Columns: ['open', 'high', 'low', 'close', 'vwap', 'volume', 'tick_count'].
-        
-        If the dataset is smaller than the threshold, returns an empty DataFrame 
+
+        If the dataset is smaller than the threshold, returns an empty DataFrame
         with the correct column structure.
     """
-    
+
     n_bars = len(ticks_dataset) // threshold
-    
-    # Case not enough datas
+
+    # Not enough ticks to fill a single bar
     if n_bars == 0:
-        bars = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'vwap', 'volume', 'tick_count'])
+        bars = pd.DataFrame(columns=["open", "high", "low", "close", "vwap", "volume", "tick_count"])
         bars.index.name = "ts_event"
         return bars
-    
+
     # Computing the number of ticks to keep
     nb_ticks_kept = n_bars * threshold
-    
+
     # Creating the array versions of columns for computations
     arr_price = ticks_dataset["price"].values[:nb_ticks_kept]
     arr_size = ticks_dataset["size"].values[:nb_ticks_kept]
     arr_ts_event = ticks_dataset["ts_event"].values[:nb_ticks_kept]
-    
+
     # Reshaping our arrays to only take into account the right prices
     price_matrix = arr_price.reshape(n_bars, threshold)
     size_matrix = arr_size.reshape(n_bars, threshold)
     ts_event_matrix = arr_ts_event.reshape(n_bars, threshold)
-    
+
     # Compute volume and dollar values of ticks
     vol_sum = size_matrix.sum(axis=1)
     dollar = np.einsum("ij,ij->i", price_matrix, size_matrix)
-    
+
     # Computing the tick bars
-    bars = pd.DataFrame({
-        'open': price_matrix[:, 0],
-        'high': price_matrix.max(axis=1),
-        'low': price_matrix.min(axis=1),
-        'close': price_matrix[:, -1],
-        'vwap': dollar / vol_sum,
-        'volume': vol_sum,
-        'tick_count': threshold
-    }, index=ts_event_matrix[:, -1])
-    bars.index.name = 'ts_event'
-    
+    bars = pd.DataFrame(
+        {
+            "open": price_matrix[:, 0],
+            "high": price_matrix.max(axis=1),
+            "low": price_matrix.min(axis=1),
+            "close": price_matrix[:, -1],
+            "vwap": dollar / vol_sum,
+            "volume": vol_sum,
+            "tick_count": threshold,
+        },
+        index=ts_event_matrix[:, -1],
+    )
+    bars.index.name = "ts_event"
+
     return bars
 
 
-def volume_bars_creator(ticks_dataset: pd.DataFrame, 
-                        threshold: int = 6000) -> pd.DataFrame:
+def volume_bars_creator(ticks_dataset: pd.DataFrame, threshold: int = 6000) -> pd.DataFrame:
     """
     Creates Volume Bars from raw tick data by aggregating trades until a volume threshold is reached.
 
-    Unlike Tick Bars (based on transaction count) or Time Bars (based on clock time), 
-    Volume Bars are sampled every time a cumulative volume of `threshold` shares/contracts 
-    is exchanged. This creates a sampling distribution that mimics the liquidity structure 
+    Unlike Tick Bars (based on transaction count) or Time Bars (based on clock time),
+    Volume Bars are sampled every time a cumulative volume of `threshold` shares/contracts
+    is exchanged. This creates a sampling distribution that mimics the liquidity structure
     of the market.
 
     Implementation details:
@@ -141,54 +142,55 @@ def volume_bars_creator(ticks_dataset: pd.DataFrame,
             Defaults to 6000.
 
     Returns:
-        pd.DataFrame: A DataFrame containing OHLCV bars indexed by the timestamp 
+        pd.DataFrame: A DataFrame containing OHLCV bars indexed by the timestamp
         of the *last* tick in each bar.
         Columns: ['open', 'high', 'low', 'close', 'vwap', 'volume', 'tick_count'].
     """
-    
+
     data = ticks_dataset[["ts_event", "price", "size"]].copy()
 
     # Vectorized Grouping
     data["cum_volume"] = data["size"].cumsum()
     data["bar_id"] = (data["cum_volume"] // threshold).astype(np.uint32)
-    data["dollar_value"] = data['price'] * data['size']
+    data["dollar_value"] = data["price"] * data["size"]
 
     # Single groupby for all aggregations
-    bars = data.groupby('bar_id').agg({
-        'ts_event': 'last',
-        'price': ['first', 'max', 'min', 'last'],
-        'size': ['sum', 'count'],
-        'dollar_value': 'sum'
-    })
+    bars = data.groupby("bar_id").agg(
+        {
+            "ts_event": "last",
+            "price": ["first", "max", "min", "last"],
+            "size": ["sum", "count"],
+            "dollar_value": "sum",
+        }
+    )
 
     # Naming bars columns
-    bars.columns = ['ts_event', 'open', 'high', 'low', 'close', 'volume', 'tick_count', 'dollar_sum']
+    bars.columns = ["ts_event", "open", "high", "low", "close", "volume", "tick_count", "dollar_sum"]
 
     # Computing vwap
-    bars["vwap"] = bars['dollar_sum'] / bars['volume']
+    bars["vwap"] = bars["dollar_sum"] / bars["volume"]
 
     # Setting index on bars
-    bars.set_index(keys='ts_event', inplace=True)
+    bars.set_index(keys="ts_event", inplace=True)
 
     # If the last bar is incomplete delete it
     if not bars.empty:
-        if bars.iloc[-1]['volume'] < 0.8 * threshold:
+        if bars.iloc[-1]["volume"] < 0.8 * threshold:
             bars = bars.iloc[:-1]
 
-    return bars[['open', 'high', 'low', 'close', 'vwap', 'volume', 'tick_count']]
+    return bars[["open", "high", "low", "close", "vwap", "volume", "tick_count"]]
 
 
-def dollar_bars_creator(ticks_dataset: pd.DataFrame, 
-                        threshold: float = 1.4e7) -> pd.DataFrame:
+def dollar_bars_creator(ticks_dataset: pd.DataFrame, threshold: float = 1.4e7) -> pd.DataFrame:
     """
     Creates Dollar Bars (Dollar-Value Bars) from raw tick data.
 
-    Dollar Bars are sampled every time a cumulative dollar value (Price * Size) of 
-    `threshold` is exchanged. 
-    
+    Dollar Bars are sampled every time a cumulative dollar value (Price * Size) of
+    `threshold` is exchanged.
+
     Why use Dollar Bars?
-    They are often considered robust to substantial price fluctuations. Unlike Volume Bars, 
-    Dollar Bars adjust the sampling rate based on the asset's value. If the price doubles, 
+    They are often considered robust to substantial price fluctuations. Unlike Volume Bars,
+    Dollar Bars adjust the sampling rate based on the asset's value. If the price doubles,
     it takes half the volume to form a bar, keeping the economic activity per bar constant.
     This produces the best statistical properties (normality, serial correlation) for machine learning.
 
@@ -204,47 +206,49 @@ def dollar_bars_creator(ticks_dataset: pd.DataFrame,
             Defaults to 14,000,000 (1.4e7), a common starting point for E-mini S&P 500.
 
     Returns:
-        pd.DataFrame: A DataFrame containing OHLCV bars indexed by the timestamp 
+        pd.DataFrame: A DataFrame containing OHLCV bars indexed by the timestamp
         of the *last* tick in each bar.
         Columns: ['open', 'high', 'low', 'close', 'vwap', 'volume', 'tick_count'].
     """
-    
+
     data = ticks_dataset[["ts_event", "price", "size"]].copy()
-    
+
     data["dollar_value"] = data["price"] * data["size"]
     data["dollar_value_cum"] = data["dollar_value"].cumsum()
     data["bar_id"] = (data["dollar_value_cum"] // threshold).astype(np.uint32)
-    
+
     bars = data.groupby(by="bar_id")
-    bars = bars.agg({
-        "ts_event": "last",
-        "price": ['first', 'max', 'min', 'last'],
-        "size": ['sum', 'count'],
-        "dollar_value": ['sum']
-    })
-    bars.columns = ['ts_event', 'open', 'high', 'low', 'close', 'volume', 'tick_count', 'dollar_sum']
-    
-    # If the last bar is icomplete delete it
+    bars = bars.agg(
+        {
+            "ts_event": "last",
+            "price": ["first", "max", "min", "last"],
+            "size": ["sum", "count"],
+            "dollar_value": ["sum"],
+        }
+    )
+    bars.columns = ["ts_event", "open", "high", "low", "close", "volume", "tick_count", "dollar_sum"]
+
+    # If the last bar is incomplete delete it
     if not bars.empty:
-        if bars.iloc[-1]['dollar_sum'] < 0.8 * threshold:
+        if bars.iloc[-1]["dollar_sum"] < 0.8 * threshold:
             bars = bars.iloc[:-1]
 
-    bars['vwap'] = bars['dollar_sum'] / bars['volume']
+    bars["vwap"] = bars["dollar_sum"] / bars["volume"]
     bars.set_index(keys="ts_event", inplace=True)
-    
-    return bars[['open', 'high', 'low', 'close', 'vwap', 'volume', 'tick_count']]
+
+    return bars[["open", "high", "low", "close", "vwap", "volume", "tick_count"]]
 
 
 @njit(cache=True, fastmath=True)
 def get_imbalance_bars_numba(
     tick_signs: NDArray,
     roll_indices: NDArray[np.int32],
-    initial_T: float = 1000.,
-    initial_E_b: float = 0.,
+    initial_T: float = 1000.0,
+    initial_E_b: float = 0.0,
     min_bar_length: int = 10,
     span_fast: int = 100,
     span_slow: int = 1000,
-    switch_after_bars: int = 50
+    switch_after_bars: int = 50,
 ) -> NDArray[np.int32]:
     """
     Numba engine for Imbalance Bars with 2-speed EWMA:
@@ -329,15 +333,15 @@ def apply_imbalance_bars(df: pd.DataFrame, bar_indices: NDArray[np.int32]) -> pd
         of the *last* tick in each bar.
     """
     if len(bar_indices) == 0:
-        out = pd.DataFrame(columns=["open","high","low","close","vwap","volume","tick_count"])
+        out = pd.DataFrame(columns=["open", "high", "low", "close", "vwap", "volume", "tick_count"])
         out.set_index(pd.DatetimeIndex([], name="ts_event"), inplace=True)
         return out
 
     # Extract raw arrays (truncated to last bar — views, no copy)
     end = bar_indices[-1] + 1
-    prices = df['price'].values[:end]
-    sizes  = df['size'].values[:end]
-    ts     = df['ts_event'].values[:end]
+    prices = df["price"].values[:end]
+    sizes = df["size"].values[:end]
+    ts = df["ts_event"].values[:end]
 
     # Build start indices for each bar (reduceat expects start-of-group positions)
     starts = np.empty(len(bar_indices), dtype=np.intp)
@@ -345,10 +349,10 @@ def apply_imbalance_bars(df: pd.DataFrame, bar_indices: NDArray[np.int32]) -> pd
     starts[1:] = bar_indices[:-1] + 1
 
     # OHLCV via reduceat / direct indexing
-    open_  = prices[starts]
+    open_ = prices[starts]
     close_ = prices[bar_indices]
-    high_  = np.maximum.reduceat(prices, starts)
-    low_   = np.minimum.reduceat(prices, starts)
+    high_ = np.maximum.reduceat(prices, starts)
+    low_ = np.minimum.reduceat(prices, starts)
     volume = np.add.reduceat(sizes, starts)
     tick_count = bar_indices - starts + 1
 
@@ -360,22 +364,25 @@ def apply_imbalance_bars(df: pd.DataFrame, bar_indices: NDArray[np.int32]) -> pd
     # Timestamp = last tick of each bar
     ts_index = ts[bar_indices]
 
-    bars = pd.DataFrame({
-        'open': open_,
-        'high': high_,
-        'low': low_,
-        'close': close_,
-        'vwap': vwap,
-        'volume': volume,
-        'tick_count': tick_count,
-    }, index=ts_index)
-    bars.index.name = 'ts_event'
+    bars = pd.DataFrame(
+        {
+            "open": open_,
+            "high": high_,
+            "low": low_,
+            "close": close_,
+            "vwap": vwap,
+            "volume": volume,
+            "tick_count": tick_count,
+        },
+        index=ts_index,
+    )
+    bars.index.name = "ts_event"
 
     return bars
 
 
 def roll_indices_from_dates(data_ts: NDArray, roll_dates_ns: NDArray) -> NDArray[np.int32]:
-    
+
     idx = np.searchsorted(data_ts, roll_dates_ns, side="left")
 
     # Keep valid indices strictly inside the array (0 excluded because later we do -1)
@@ -412,10 +419,10 @@ def _ewma_last(values: np.ndarray, span: int) -> float:
 
 def _warmup_timebars_and_init(
     data: pd.DataFrame,
-    x_full: np.ndarray,                   # series fed to numba (tick signs, signed volume, signed $)
+    x_full: np.ndarray,  # series fed to numba (tick signs, signed volume, signed $)
     warmup_minutes: int,
     warmup_bars_count: int,
-    span: int
+    span: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, float, float, np.datetime64]:
     """
     Builds warmup time bars on the first warmup_minutes, returns:
@@ -480,7 +487,7 @@ def tick_imbalance_bar_creator(
     warmup_minutes: int = 3,
     warmup_bars_count: int = 3,
     span: int = 1000,
-    include_warmup: bool = False
+    include_warmup: bool = False,
 ) -> pd.DataFrame:
 
     data = _prepare_data(ticks_dataset)
@@ -493,7 +500,7 @@ def tick_imbalance_bar_creator(
         x_full=b_full.astype(np.float64),  # for sums/means (safe)
         warmup_minutes=warmup_minutes,
         warmup_bars_count=warmup_bars_count,
-        span=span
+        span=span,
     )
 
     # algo part
@@ -511,7 +518,7 @@ def tick_imbalance_bar_creator(
         initial_E_b=initial_E_b,
         min_bar_length=min_bar_len,
         span_fast=max(span // 1000, 100),
-        span_slow=span
+        span_slow=span,
     )
 
     bars_algo = apply_imbalance_bars(df_algo, bar_indices_algo)
@@ -524,19 +531,21 @@ def tick_imbalance_bar_creator(
     dfw["_dollar"] = dfw["price"].to_numpy() * dfw["size"].to_numpy()
     gw = dfw.groupby("_bin", sort=False)
 
-    warmup_bars = pd.DataFrame({
-        "open": gw["price"].first(),
-        "high": gw["price"].max(),
-        "low":  gw["price"].min(),
-        "close": gw["price"].last(),
-        "volume": gw["size"].sum(),
-        "tick_count": gw["price"].count(),
-        "dollar_sum": gw["_dollar"].sum(),
-        "ts_event": gw["ts_event"].last(),
-    }).set_index("ts_event")
+    warmup_bars = pd.DataFrame(
+        {
+            "open": gw["price"].first(),
+            "high": gw["price"].max(),
+            "low": gw["price"].min(),
+            "close": gw["price"].last(),
+            "volume": gw["size"].sum(),
+            "tick_count": gw["price"].count(),
+            "dollar_sum": gw["_dollar"].sum(),
+            "ts_event": gw["ts_event"].last(),
+        }
+    ).set_index("ts_event")
 
     warmup_bars["vwap"] = warmup_bars["dollar_sum"] / warmup_bars["volume"]
-    warmup_bars = warmup_bars[["open","high","low","close","vwap","volume","tick_count"]]
+    warmup_bars = warmup_bars[["open", "high", "low", "close", "vwap", "volume", "tick_count"]]
 
     return pd.concat([warmup_bars, bars_algo], axis=0)
 
@@ -548,14 +557,13 @@ def volume_imbalance_bar_creator(
     warmup_minutes: int = 3,
     warmup_bars_count: int = 3,
     span: int = 1000,
-    include_warmup: bool = False
+    include_warmup: bool = False,
 ) -> pd.DataFrame:
 
     data = _prepare_data(ticks_dataset)
 
     # signed volume series (this is what theta accumulates)
-    bv_full = (data["size"].to_numpy(dtype=np.float64) *
-               data["tick_rule"].to_numpy(dtype=np.float64))
+    bv_full = data["size"].to_numpy(dtype=np.float64) * data["tick_rule"].to_numpy(dtype=np.float64)
 
     # warmup -> init
     df_warmup, df_algo, initial_T, initial_E_b, cutoff_time = _warmup_timebars_and_init(
@@ -563,12 +571,11 @@ def volume_imbalance_bar_creator(
         x_full=bv_full,  # signed volume
         warmup_minutes=warmup_minutes,
         warmup_bars_count=warmup_bars_count,
-        span=span
+        span=span,
     )
 
     # algo part
-    bv_algo = (df_algo["size"].to_numpy(dtype=np.float64) *
-               df_algo["tick_rule"].to_numpy(dtype=np.float64))
+    bv_algo = df_algo["size"].to_numpy(dtype=np.float64) * df_algo["tick_rule"].to_numpy(dtype=np.float64)
 
     roll_dates = np.asarray(roll_dates, dtype="datetime64[ns]")
     relevant_rolls = roll_dates[roll_dates >= cutoff_time]
@@ -582,7 +589,7 @@ def volume_imbalance_bar_creator(
         initial_E_b=initial_E_b,
         min_bar_length=min_bar_len,
         span_fast=max(span // 1000, 100),
-        span_slow=span
+        span_slow=span,
     )
 
     bars_algo = apply_imbalance_bars(df_algo, bar_indices_algo)
@@ -601,19 +608,21 @@ def volume_imbalance_bar_creator(
     dfw["_bin"] = ((ts_w - start_ns) // freq_ns).astype(np.int64)
 
     gw = dfw.groupby("_bin", sort=False)
-    warmup_bars = pd.DataFrame({
-        "open": gw["price"].first(),
-        "high": gw["price"].max(),
-        "low":  gw["price"].min(),
-        "close": gw["price"].last(),
-        "volume": gw["size"].sum(),
-        "tick_count": gw["price"].count(),
-        "dollar_sum": gw["_dollar"].sum(),
-        "ts_event": gw["ts_event"].last(),
-    }).set_index("ts_event")
+    warmup_bars = pd.DataFrame(
+        {
+            "open": gw["price"].first(),
+            "high": gw["price"].max(),
+            "low": gw["price"].min(),
+            "close": gw["price"].last(),
+            "volume": gw["size"].sum(),
+            "tick_count": gw["price"].count(),
+            "dollar_sum": gw["_dollar"].sum(),
+            "ts_event": gw["ts_event"].last(),
+        }
+    ).set_index("ts_event")
 
     warmup_bars["vwap"] = warmup_bars["dollar_sum"] / warmup_bars["volume"]
-    warmup_bars = warmup_bars[["open","high","low","close","vwap","volume","tick_count"]]
+    warmup_bars = warmup_bars[["open", "high", "low", "close", "vwap", "volume", "tick_count"]]
 
     return pd.concat([warmup_bars, bars_algo], axis=0)
 
@@ -625,7 +634,7 @@ def dollar_imbalance_bar_creator(
     warmup_minutes: int = 3,
     warmup_bars_count: int = 3,
     span: int = 1000,
-    include_warmup: bool = False
+    include_warmup: bool = False,
 ) -> pd.DataFrame:
     """
     Dollar Imbalance Bars with Time-Bar warmup:
@@ -651,7 +660,7 @@ def dollar_imbalance_bar_creator(
         x_full=bd_full,
         warmup_minutes=warmup_minutes,
         warmup_bars_count=warmup_bars_count,
-        span=span
+        span=span,
     )
 
     # 3) Algo part inputs
@@ -674,8 +683,8 @@ def dollar_imbalance_bar_creator(
         initial_T=initial_T,
         initial_E_b=initial_E_b,
         min_bar_length=min_bar_len,
-        span_fast=max(span/1000, 100),
-        span_slow=span
+        span_fast=max(span // 1000, 100),
+        span_slow=span,
     )
 
     bars_algo = apply_imbalance_bars(df_algo, bar_indices_algo)
@@ -697,16 +706,18 @@ def dollar_imbalance_bar_creator(
     dfw["_dollar"] = dfw["price"].to_numpy(dtype=np.float64) * dfw["size"].to_numpy(dtype=np.float64)
 
     gw = dfw.groupby("_bin", sort=False)
-    warmup_bars = pd.DataFrame({
-        "open": gw["price"].first(),
-        "high": gw["price"].max(),
-        "low":  gw["price"].min(),
-        "close": gw["price"].last(),
-        "volume": gw["size"].sum(),
-        "tick_count": gw["price"].count(),
-        "dollar_sum": gw["_dollar"].sum(),
-        "ts_event": gw["ts_event"].last(),
-    }).set_index("ts_event")
+    warmup_bars = pd.DataFrame(
+        {
+            "open": gw["price"].first(),
+            "high": gw["price"].max(),
+            "low": gw["price"].min(),
+            "close": gw["price"].last(),
+            "volume": gw["size"].sum(),
+            "tick_count": gw["price"].count(),
+            "dollar_sum": gw["_dollar"].sum(),
+            "ts_event": gw["ts_event"].last(),
+        }
+    ).set_index("ts_event")
 
     warmup_bars["vwap"] = warmup_bars["dollar_sum"] / warmup_bars["volume"]
     warmup_bars = warmup_bars[["open", "high", "low", "close", "vwap", "volume", "tick_count"]]
@@ -714,53 +725,56 @@ def dollar_imbalance_bar_creator(
     return pd.concat([warmup_bars, bars_algo], axis=0)
 
 
-
 @njit(cache=True, fastmath=True)
-def get_runs_bars_numba(tick_signs: NDArray,
-                        roll_indices: NDArray[np.int32], 
-                        initial_T: float = 1000.,
-                        initial_E_b_plus: float = 0.5,
-                        initial_E_b_minus: float = 0.5, 
-                        min_bar_length: int = 10,
-                        span: int = 1000) -> NDArray[np.int32]:
+def get_runs_bars_numba(
+    tick_signs: NDArray,
+    roll_indices: NDArray[np.int32],
+    initial_T: float = 1000.0,
+    initial_E_b_plus: float = 0.5,
+    initial_E_b_minus: float = 0.5,
+    min_bar_length: int = 10,
+    span: int = 1000,
+) -> NDArray[np.int32]:
     """
     Numba optimized engine for Runs Bars generation.
-    
+
     Tracks separate accumulators for Buy runs (theta_plus) and Sell runs (theta_minus).
-    A bar is sampled when the maximum of these two accumulators exceeds the expected 
+    A bar is sampled when the maximum of these two accumulators exceeds the expected
     run size times the expected duration.
     """
-    
+
     # Length of our tick dataset
     T = len(tick_signs)
-    
+
+    # Roll flags: mark the roll at (roll_idx - 1) to close the bar right before the roll tick.
     is_roll = np.zeros(T, dtype=np.bool_)
     if len(roll_indices) > 0:
-        for r in (roll_indices - 1):
-            if r < T:
+        for rr in roll_indices:
+            r = rr - 1
+            if 0 <= r < T:
                 is_roll[r] = True
-    
+
     # Initializing vector of zeros
-    bar_indices = np.zeros(T, dtype=np.uint32)
+    bar_indices = np.zeros(T, dtype=np.int32)
     bar_count = 0
-    
+
     # Initializing theta
-    theta_plus = 0.
-    theta_minus = 0.
-    alpha = 2. / (span + 1)
-    
+    theta_plus = 0.0
+    theta_minus = 0.0
+    alpha = 2.0 / (span + 1)
+
     # Initializing expectations
     E_T = initial_T
     E_b_plus = initial_E_b_plus
     E_b_minus = initial_E_b_minus
-    
+
     # initializing index of the last bar tick
     last_idx = -1
-    
+
     # Computing min_threshold
     min_expected_plus = np.maximum(np.abs(initial_E_b_plus) * 1e-4, 1e-6)
     min_expected_minus = np.maximum(np.abs(initial_E_b_minus) * 1e-4, 1e-6)
-    
+
     # Computing the bars indexes
     for i in range(T):
         # Computing theta plus and theta minus using simple conditions
@@ -768,56 +782,58 @@ def get_runs_bars_numba(tick_signs: NDArray,
             theta_plus += tick_signs[i]
         else:
             theta_minus -= tick_signs[i]
-        
+
         # Theta is the largest one
         theta = np.maximum(theta_plus, theta_minus)
-        
-        # Thresold computation
+
+        # Threshold computation
         expected_plus = np.maximum(np.abs(E_b_plus), min_expected_plus)
         expected_minus = np.maximum(np.abs(E_b_minus), min_expected_minus)
         threshold = E_T * np.maximum(expected_plus, expected_minus)
-        
+
         # Triggers
         imbalance_trigger = theta >= threshold and (i - last_idx) >= min_bar_length
         roll_trigger = is_roll[i]
-        
+
         if imbalance_trigger or roll_trigger:
             # add the index
             bar_indices[bar_count] = i
             bar_count += 1
-            
+
             # update the current mean
             current_T = i - last_idx
             E_T = (1 - alpha) * E_T + alpha * current_T
-            
+
             if imbalance_trigger:
                 current_b_plus = theta_plus / current_T
                 current_b_minus = theta_minus / current_T
                 E_b_plus = (1 - alpha) * E_b_plus + alpha * current_b_plus
                 E_b_minus = (1 - alpha) * E_b_minus + alpha * current_b_minus
-            
+
             # Reset
             theta_plus = 0
             theta_minus = 0
             last_idx = i
-            
+
     # return only the non empty values
     return bar_indices[:bar_count]
 
 
-def tick_runs_bar_creator(ticks_dataset: pd.DataFrame,
-                          roll_dates: NDArray,
-                          min_bar_len: int = 10,
-                          ticks_first_bar: int = 1000,
-                          span: int = 1000) -> pd.DataFrame:
+def tick_runs_bar_creator(
+    ticks_dataset: pd.DataFrame,
+    roll_dates: NDArray,
+    min_bar_len: int = 10,
+    ticks_first_bar: int = 1000,
+    span: int = 1000,
+) -> pd.DataFrame:
     """
     Orchestrates the creation of Tick Runs Bars.
 
     Runs Bars monitor the sequence of buys and sells separately.
-    Unlike Imbalance bars which look at the net flow (Buy - Sell), Runs bars look at 
+    Unlike Imbalance bars which look at the net flow (Buy - Sell), Runs bars look at
     the intensity of each side (Max(Buy sequence, Sell sequence)).
-    
-    This is useful to detect aggressive accumulation or distribution even if 
+
+    This is useful to detect aggressive accumulation or distribution even if
     the net imbalance is low due to noise.
 
     Args:
@@ -830,39 +846,43 @@ def tick_runs_bar_creator(ticks_dataset: pd.DataFrame,
     Returns:
         pd.DataFrame: The final Runs OHLCV Bars.
     """
-    
+
     data = _prepare_data(ticks_dataset)
-    
+
     b = data["tick_rule"].values.astype(np.int8)
-    
+
     W = min(len(b), ticks_first_bar)
     temp = b[:W]
     initial_E_b_plus = (temp > 0).mean()
     initial_E_b_minus = 1 - initial_E_b_plus
-    
-    roll_indices = roll_indices_from_dates(data['ts_event'].values, roll_dates)
-    
-    bar_indices = get_runs_bars_numba(b,
-                                      roll_indices=roll_indices, 
-                                      initial_T=float(W), 
-                                      initial_E_b_plus=initial_E_b_plus, 
-                                      initial_E_b_minus=initial_E_b_minus,
-                                      span=span,
-                                      min_bar_length=min_bar_len)
-    
+
+    roll_indices = roll_indices_from_dates(data["ts_event"].values, roll_dates)
+
+    bar_indices = get_runs_bars_numba(
+        b,
+        roll_indices=roll_indices,
+        initial_T=float(W),
+        initial_E_b_plus=initial_E_b_plus,
+        initial_E_b_minus=initial_E_b_minus,
+        span=span,
+        min_bar_length=min_bar_len,
+    )
+
     return apply_imbalance_bars(data, bar_indices)
 
 
-def volume_runs_bar_creator(ticks_dataset: pd.DataFrame,
-                            roll_dates: NDArray,
-                            min_bar_len: int = 10,
-                            ticks_first_bar: int = 1000,
-                            span: int = 1000) -> pd.DataFrame:
+def volume_runs_bar_creator(
+    ticks_dataset: pd.DataFrame,
+    roll_dates: NDArray,
+    min_bar_len: int = 10,
+    ticks_first_bar: int = 1000,
+    span: int = 1000,
+) -> pd.DataFrame:
     """
     Orchestrates the creation of Volume Runs Bars.
 
-    This method samples bars when the accumulated volume on one side (Buy OR Sell) 
-    exceeds expectations. It is particularly effective at capturing periods of 
+    This method samples bars when the accumulated volume on one side (Buy OR Sell)
+    exceeds expectations. It is particularly effective at capturing periods of
     heavy institutional accumulation or distribution.
 
     Args:
@@ -875,51 +895,55 @@ def volume_runs_bar_creator(ticks_dataset: pd.DataFrame,
     Returns:
         pd.DataFrame: The final Volume Runs OHLCV Bars.
     """
-    
+
     # 1. Prep data (copy + tick rule + dropna)
     data = _prepare_data(ticks_dataset)
 
     # 2. Calculate Signed Volume
     # bv contains: +Vol, -Vol, or 0
     bv = (data["size"].values * data["tick_rule"].values).astype(np.float64)
-    
-    # 5. Initialization (Specific to Volume Runs)
+
+    # 3. Initialization (Specific to Volume Runs)
     # We estimate the average volume contribution per tick for each side.
     W = min(len(bv), ticks_first_bar)
     temp = bv[:W]
-    
+
     # Mean of Buy Volume over ALL ticks (Treating sells as 0)
-    initial_E_b_plus = np.maximum(temp, 0.).mean()
+    initial_E_b_plus = np.maximum(temp, 0.0).mean()
     # Mean of Sell Volume over ALL ticks (Treating buys as 0, taking abs value)
-    initial_E_b_minus = np.maximum(-temp, 0.).mean()
-    
-    # 6. Re-align Roll Indices (Critical after dropna)
-    roll_indices = roll_indices_from_dates(data['ts_event'].values, roll_dates)
-    
-    # 7. Run Numba Engine
-    bar_indices = get_runs_bars_numba(bv, 
-                                      roll_indices=roll_indices, 
-                                      initial_T=float(W), 
-                                      initial_E_b_plus=initial_E_b_plus, 
-                                      initial_E_b_minus=initial_E_b_minus,
-                                      span=span,
-                                      min_bar_length=min_bar_len)
-    
-    # 8. Final Aggregation
+    initial_E_b_minus = np.maximum(-temp, 0.0).mean()
+
+    # 4. Re-align Roll Indices (Critical after dropna)
+    roll_indices = roll_indices_from_dates(data["ts_event"].values, roll_dates)
+
+    # 5. Run Numba Engine
+    bar_indices = get_runs_bars_numba(
+        bv,
+        roll_indices=roll_indices,
+        initial_T=float(W),
+        initial_E_b_plus=initial_E_b_plus,
+        initial_E_b_minus=initial_E_b_minus,
+        span=span,
+        min_bar_length=min_bar_len,
+    )
+
+    # 6. Final Aggregation
     return apply_imbalance_bars(data, bar_indices)
 
 
-def dollar_runs_bar_creator(ticks_dataset: pd.DataFrame,
-                            roll_dates: NDArray,
-                            min_bar_len: int = 10,
-                            ticks_first_bar: int = 1000,
-                            span: int = 1000) -> pd.DataFrame:
+def dollar_runs_bar_creator(
+    ticks_dataset: pd.DataFrame,
+    roll_dates: NDArray,
+    min_bar_len: int = 10,
+    ticks_first_bar: int = 1000,
+    span: int = 1000,
+) -> pd.DataFrame:
     """
     Orchestrates the creation of Dollar Runs Bars.
 
-    This method samples bars when the accumulated dollar value on one side (Buy OR Sell) 
-    exceeds expectations. 
-    
+    This method samples bars when the accumulated dollar value on one side (Buy OR Sell)
+    exceeds expectations.
+
     Why use this?
     It is arguably the most sophisticated sampling method in this module. It combines:
     1. The robustness of Dollar Bars (economic value).
@@ -935,35 +959,37 @@ def dollar_runs_bar_creator(ticks_dataset: pd.DataFrame,
     Returns:
         pd.DataFrame: The final Dollar Runs OHLCV Bars.
     """
-    
+
     # 1. Prep data (copy + tick rule + dropna)
     data = _prepare_data(ticks_dataset)
 
     # 2. Calculate Signed Dollar Value (bd)
     # bd = Price * Size * Sign
-    bd = (data['price'].values * data["size"].values * data["tick_rule"].values).astype(np.float64)
-    
-    # 5. Initialization (Specific to Dollar Runs)
+    bd = (data["price"].values * data["size"].values * data["tick_rule"].values).astype(np.float64)
+
+    # 3. Initialization (Specific to Dollar Runs)
     # We estimate the average dollar contribution per tick for each side.
     W = min(len(bd), ticks_first_bar)
     temp = bd[:W]
-    
+
     # Mean of Buy Dollar Flow over ALL ticks
-    initial_E_b_plus = np.maximum(temp, 0.).mean()
+    initial_E_b_plus = np.maximum(temp, 0.0).mean()
     # Mean of Sell Dollar Flow over ALL ticks
-    initial_E_b_minus = np.maximum(-temp, 0.).mean()
-    
-    # 6. Re-align Roll Indices (Critical after dropna)
-    roll_indices = roll_indices_from_dates(data['ts_event'].values, roll_dates)
-    
-    # 7. Run Numba Engine
-    bar_indices = get_runs_bars_numba(bd, 
-                                      roll_indices=roll_indices, 
-                                      initial_T=float(W), 
-                                      initial_E_b_plus=initial_E_b_plus, 
-                                      initial_E_b_minus=initial_E_b_minus,
-                                      span=span,
-                                      min_bar_length=min_bar_len)
-    
-    # 8. Final Aggregation
+    initial_E_b_minus = np.maximum(-temp, 0.0).mean()
+
+    # 4. Re-align Roll Indices (Critical after dropna)
+    roll_indices = roll_indices_from_dates(data["ts_event"].values, roll_dates)
+
+    # 5. Run Numba Engine
+    bar_indices = get_runs_bars_numba(
+        bd,
+        roll_indices=roll_indices,
+        initial_T=float(W),
+        initial_E_b_plus=initial_E_b_plus,
+        initial_E_b_minus=initial_E_b_minus,
+        span=span,
+        min_bar_length=min_bar_len,
+    )
+
+    # 6. Final Aggregation
     return apply_imbalance_bars(data, bar_indices)
